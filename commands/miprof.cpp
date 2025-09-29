@@ -130,11 +130,11 @@ void execute(vector<char*> arguments, int param, string input, vector<string> mi
             double interval = 0.05;
             bool done = false;
             int status, status2;
-            double timelimit = stod(miprofargs[2]);
             string buffermessage, message = "";
             char buffer[64000];
 
             if (miprofargs[1].compare("ejecutar") == 0) {
+                double timelimit = stod(miprofargs[2]);
                 while (elapsed < timelimit) {
                     pid_t result = waitpid(pd, &status2, WNOHANG);
                     if (result == pd) {
