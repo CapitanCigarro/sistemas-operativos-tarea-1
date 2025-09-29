@@ -28,7 +28,7 @@ vector<vector<string>> parseInput(string input) {
         input = input.substr(9);
         parsedInput.push_back(input.substr(0, input.find(" ") + 1));
 
-    } else {
+    } else if (input.substr(0, 5).compare("ejec") == 0) {
         input = input.substr(5);
         parsedInput.push_back("ejec");
 
@@ -94,11 +94,13 @@ void execute(vector<char*> arguments, int param, string input, vector<string> mi
         dup2(pipewrite, 1005);
         close(pipewrite);
 
+        // Child Process
+
         int auxpipe[2];
         pipe(auxpipe);
 
         int readp = auxpipe[0];
-        int write = auxpipe[1];
+        int writep = auxpipe[1];
 
         struct timeval start, end;
         struct rusage usage;
@@ -110,8 +112,8 @@ void execute(vector<char*> arguments, int param, string input, vector<string> mi
         if (pd == 0) {
             // Grandchild Process
             close(readp);
-            dup2(write, STDOUT_FILENO);
-            close(write);
+            dup2(writep, STDOUT_FILENO);
+            close(writep);
 
             if (param > 1) {
                 execvp(arguments[0], arguments.data());
@@ -124,7 +126,7 @@ void execute(vector<char*> arguments, int param, string input, vector<string> mi
 
         } else {
             // Child Process
-            close(write);
+            close(writep);
 
             double elapsed = 0;
             double interval = 0.05;
@@ -133,24 +135,28 @@ void execute(vector<char*> arguments, int param, string input, vector<string> mi
             string buffermessage, message = "";
             char buffer[64000];
 
-            if (miprofargs[1].compare("ejecutar") == 0) {
-                double timelimit = stod(miprofargs[2]);
-                while (elapsed < timelimit) {
-                    pid_t result = waitpid(pd, &status2, WNOHANG);
-                    if (result == pd) {
-                        done = true;
-                        break;
+            if (miprofargs.size() > 1) {
+
+                if (miprofargs[1].compare("ejecutar") == 0) {
+                    double timelimit = stod(miprofargs[2]);
+                    while (elapsed < timelimit) {
+                        pid_t result = waitpid(pd, &status2, WNOHANG);
+                        if (result == pd) {
+                            done = true;
+                            break;
+
+                        }
+                        usleep((useconds_t)(interval * 1e6));
+                        elapsed += interval;
 
                     }
-                    usleep((useconds_t)(interval * 1e6));
-                    elapsed += interval;
 
-                }
+                    if (done == false) {
+                        kill(pd, SIGKILL);
+                        wait4(pd, &status, 0, &usage);
 
-                if (done == false) {
-                    kill(pd, SIGKILL);
-                    wait4(pd, &status, 0, &usage);
 
+                    }
 
                 }
                 
@@ -164,30 +170,35 @@ void execute(vector<char*> arguments, int param, string input, vector<string> mi
             gettimeofday(&end, nullptr);
 
             string realtime = to_string(((end.tv_sec - start.tv_sec) + (end.tv_sec - start.tv_sec) / 1e6));
-            string usertime = to_string(usage.ru_utime.tv_sec + usage.ru_utime.tv_sec / 1e6);
-            string systime = to_string(usage.ru_stime.tv_sec + usage.ru_stime.tv_sec / 1e6);
+            string usertime = to_string(usage.ru_utime.tv_sec + usage.ru_utime.tv_usec / 1e6);
+            string systime = to_string(usage.ru_stime.tv_sec + usage.ru_stime.tv_usec / 1e6);
             string maxrss = to_string(usage.ru_maxrss);
 
-            message = input + "\n" + realtime + "\n" + usertime + "\n" + systime + "\n" + maxrss + "\n" + buffermessage;
+            message = "Input : " + input + "\n" + "Real Time : " + realtime + "\n" + "User Time :" + usertime + "\n"; 
+            message += "System Time : " + systime + "\n" + "Maximum Resident Set : " + maxrss + " KB\n" + "Console Message :\n" + buffermessage;
 
-            if (miprofargs[1].compare("ejecsave") == 0) {
-                ofstream textfile(miprofargs[2], ios::app);
-                textfile << message;
-                textfile.close();
+            if (miprofargs.size() > 1) {
+
+                if (miprofargs[1].compare("ejecsave") == 0) {
+                    ofstream textfile(miprofargs[2], ios::app);
+                    textfile << message;
+                    textfile.close();
+
+                }
 
             }
 
-            
+            char * buffer2 = new char[message.size()];
+            strcpy(buffer2, message.c_str());
+            cout << buffer2;
 
         }
-
-        
 
     } else {
         // Parent Process
         close(pipewrite);
 
-        piperead = 1005;
+        piperead = 1008;
 
         int status;
         waitpid(pid, &status, 0);
@@ -227,7 +238,6 @@ int main() {
     int param = 0;
 
     for (auto str : commandargs) {
-        str = str.substr(0, str.length() / 2 + 1);
         char * copy = new char[str.size()];
         strcpy(copy, str.c_str());
         arguments.push_back(copy);
